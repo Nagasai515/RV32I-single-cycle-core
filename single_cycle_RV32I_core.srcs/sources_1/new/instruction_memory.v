@@ -1,14 +1,19 @@
+`timescale 1ns / 1ps
+
 module instruction_memory (
     input  wire [31:0] address,
     output wire [31:0] instruction
 );
 
+    // 256 words × 32-bit = 1 KB instruction memory
     reg [31:0] mem [0:255];
     integer i;
 
     initial begin
-        // Program
-          mem[0]  = 32'h00500093; // addi x1, x0, 5
+        // -------------------------
+        // Program Instructions
+        // -------------------------
+        mem[0]  = 32'h00500093; // addi x1, x0, 5
         mem[1]  = 32'h00a00113; // addi x2, x0, 10
         mem[2]  = 32'h002081b3; // add  x3, x1, x2
         mem[3]  = 32'h00300023; // sw   x3, 0(x0)
@@ -23,11 +28,14 @@ module instruction_memory (
         mem[12] = 32'h00148493; // addi x9, x9, 1
         mem[13] = 32'h00948463; // beq  x9, x9, -4 (loop)
 
-        // Fill rest with NOPs
-        for (i = 6; i < 256; i = i + 1)
-            mem[i] = 32'h00000013;
+        // -------------------------
+        // Fill remaining memory with NOPs
+        // -------------------------
+        for (i = 14; i < 256; i = i + 1)
+            mem[i] = 32'h00000013; // NOP = addi x0, x0, 0
     end
 
+    // Word-aligned instruction fetch
     assign instruction = mem[address[9:2]];
 
 endmodule

@@ -1,51 +1,52 @@
+`timescale 1ns / 1ps
+
 module top_cpu (
     input wire clk,
     input wire reset
 );
 
-    // -------------------------
+    // =========================================================
     // PC and Next PC Logic
-    // -------------------------
-    wire [31:0] pc, next_pc, pc_plus_4, branch_target;
+    // =========================================================
+    wire [31:0] pc, pc_next, pc_plus4, branch_target;
 
     pc PC_REG (
         .clk(clk),
         .reset(reset),
-        .next_pc(next_pc),
+        .next_pc(pc_next),
         .pc(pc)
     );
 
     pc_adder PC_PLUS4 (
         .pc(pc),
-        .pc_plus_4(pc_plus_4)
+        .pc_plus_4(pc_plus4)
     );
 
-    // -------------------------
+    // =========================================================
     // Instruction Memory
-    // -------------------------
-    wire [31:0] instruction;
+    // =========================================================
+    wire [31:0] instr;
 
     instruction_memory IMEM (
         .address(pc),
-        .instruction(instruction)
+        .instruction(instr)
     );
 
-    // -------------------------
+    // =========================================================
     // Instruction Fields
-    // -------------------------
-    wire [4:0] rs1 = instruction[19:15];
-    wire [4:0] rs2 = instruction[24:20];
-    wire [4:0] rd  = instruction[11:7];
+    // =========================================================
+    wire [6:0] opcode = instr[6:0];
+    wire [4:0] rd     = instr[11:7];
+    wire [2:0] funct3 = instr[14:12];
+    wire [4:0] rs1    = instr[19:15];
+    wire [4:0] rs2    = instr[24:20];
+    wire [6:0] funct7 = instr[31:25];
 
-    wire [2:0] funct3 = instruction[14:12];
-    wire       funct7b5 = instruction[30];
-    wire [6:0] opcode = instruction[6:0];
-
-    // -------------------------
+    // =========================================================
     // Control Unit
-    // -------------------------
-    wire RegWrite, ALUSrc, MemRead, MemWrite, MemToReg, Branch;
-    wire [1:0] ALUOp;
+    // =========================================================
+    wire RegWrite, ALUSrc, MemRead, MemWrite, Branch, Jump;
+    wire [2:0] ALUOp;
 
     control_unit CU (
         .opcode(opcode),
@@ -53,16 +54,15 @@ module top_cpu (
         .ALUSrc(ALUSrc),
         .MemRead(MemRead),
         .MemWrite(MemWrite),
-        .MemToReg(MemToReg),
         .Branch(Branch),
+        .Jump(Jump),
         .ALUOp(ALUOp)
     );
 
-    // -------------------------
+    // =========================================================
     // Register File
-    // -------------------------
-    wire [31:0] reg_data1, reg_data2;
-    wire [31:0] write_back_data;
+    // =========================================================
+    wire [31:0] rs1_data, rs2_data, wb_data;
 
     register_file RF (
         .clk(clk),
@@ -70,62 +70,62 @@ module top_cpu (
         .rs1(rs1),
         .rs2(rs2),
         .rd(rd),
-        .write_data(write_back_data),
-        .read_data1(reg_data1),
-        .read_data2(reg_data2)
+        .write_data(wb_data),
+        .read_data1(rs1_data),
+        .read_data2(rs2_data)
     );
 
-    // -------------------------
+    // =========================================================
     // Immediate Generator
-    // -------------------------
-    wire [31:0] immediate;
+    // =========================================================
+    wire [31:0] imm;
 
     imm_gen IMMGEN (
-        .instr(instruction),
-        .imm_out(immediate)
+        .instr(instr),
+        .imm_out(imm)
     );
 
-    // -------------------------
-    // ALU Input MUX (ALUSrc)
-    // -------------------------
-    wire [31:0] alu_B;
+    // =========================================================
+    // ALU input mux
+    // =========================================================
+    wire [31:0] alu_in2;
 
-    mux2 ALU_SRC_MUX (
-        .in0(reg_data2),
-        .in1(immediate),
+    mux2 ALUSRC_MUX (
+        .in0(rs2_data),
+        .in1(imm),
         .sel(ALUSrc),
-        .out(alu_B)
+        .out(alu_in2)
     );
 
-    // -------------------------
+    // =========================================================
     // ALU Control
-    // -------------------------
-    wire [3:0] alu_control_signal;
+    // =========================================================
+    wire [3:0] alu_ctrl;
 
     alu_control ALUCTRL (
-        .ALUOp(ALUOp),
         .funct3(funct3),
-        .funct7b5(funct7b5),
-        .alu_control(alu_control_signal)
+        .funct7(funct7),
+        .alu_op(ALUOp),
+        .alu_ctrl(alu_ctrl)
     );
 
-    // -------------------------
+    // =========================================================
     // ALU
-    // -------------------------
+    // =========================================================
     wire [31:0] alu_result;
-    wire zero_flag;
+    wire zero;
 
     alu ALU_MAIN (
-        .A(reg_data1),
-        .B(alu_B),
-        .alu_control(alu_control_signal),
+        .a(rs1_data),
+        .b(alu_in2),
+        .alu_ctrl(alu_ctrl),
         .result(alu_result),
-        .zero(zero_flag)
+        .zero(zero)
     );
 
-    // -------------------------
+    // =========================================================
     // Data Memory
-    // -------------------------
+    // =========================================================
     wire [31:0] mem_data;
 
     data_memory DMEM (
@@ -133,42 +133,54 @@ module top_cpu (
         .MemRead(MemRead),
         .MemWrite(MemWrite),
         .address(alu_result),
-        .write_data(reg_data2),
+        .write_data(rs2_data),
         .read_data(mem_data)
     );
 
-    // -------------------------
-    // Write Back MUX (MemToReg)
-    // -------------------------
-    mux2 WB_MUX (
-        .in0(alu_result),
-        .in1(mem_data),
-        .sel(MemToReg),
-        .out(write_back_data)
-    );
-
-    // -------------------------
-    // Branch Adder
-    // -------------------------
-    branch_adder BRANCH_ADD (
+    // =========================================================
+    // Branch Target Adder
+    // =========================================================
+    branch_adder BR_ADD (
         .pc(pc),
-        .imm(immediate),
+        .imm(imm),
         .branch_target(branch_target)
     );
 
-    // -------------------------
-    // PCSrc Logic
-    // -------------------------
-    wire PCSrc = Branch & zero_flag;
+    // =========================================================
+    // Branch Decision Logic (TOP-LEVEL ONLY)
+    // =========================================================
+    reg branch_taken;
 
-    // -------------------------
-    // Next PC MUX
-    // -------------------------
-    mux2 PC_MUX (
-        .in0(pc_plus_4),
-        .in1(branch_target),
-        .sel(PCSrc),
-        .out(next_pc)
-    );
+    always @(*) begin
+        branch_taken = 1'b0;
+        if (Branch) begin
+            case (funct3)
+                3'b000: branch_taken = zero;     // BEQ
+                3'b001: branch_taken = ~zero;    // BNE
+                default: branch_taken = 1'b0;
+            endcase
+        end
+    end
+
+    // =========================================================
+    // JALR target (TOP-LEVEL ONLY)
+    // =========================================================
+    wire [31:0] jalr_target = alu_result & ~32'b1;
+
+    // =========================================================
+    // Write Back MUX (TOP-LEVEL ONLY)
+    // =========================================================
+    assign wb_data =
+        Jump     ? pc_plus4 :
+        MemRead ? mem_data :
+                   alu_result;
+
+    // =========================================================
+    // Next PC Selection (TOP-LEVEL ONLY)
+    // =========================================================
+    assign pc_next =
+        Jump         ? jalr_target :
+        branch_taken ? branch_target :
+                        pc_plus4;
 
 endmodule

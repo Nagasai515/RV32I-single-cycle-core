@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module imm_gen (
     input  wire [31:0] instr,
     output reg  [31:0] imm_out
@@ -9,28 +11,48 @@ module imm_gen (
         case (opcode)
 
             // -----------------------
-            // I-TYPE (e.g., LW, ADDI)
+            // I-TYPE
+            // addi, andi, ori, lw, jalr
+            // imm[11:0] = instr[31:20]
             // -----------------------
+            7'b0010011, // addi, andi, ori
             7'b0000011, // lw
-            7'b0010011: // addi, andi, ori, etc.
-                imm_out = {{21{instr[31]}}, instr[30:20]};
+            7'b1100111: // jalr
+                imm_out = {{20{instr[31]}}, instr[31:20]};
 
             // -----------------------
-            // S-TYPE (SW)
+            // S-TYPE
+            // sw
+            // imm = instr[31:25] | instr[11:7]
             // -----------------------
-            7'b0100011: // sw
-                imm_out = {{21{instr[31]}}, instr[30:25], instr[11:7]};
+            7'b0100011:
+                imm_out = {{20{instr[31]}}, instr[31:25], instr[11:7]};
 
             // -----------------------
-            // B-TYPE (BEQ, BNE)
+            // B-TYPE
+            // beq, bne
+            // imm = {instr[31], instr[7], instr[30:25], instr[11:8], 0}
             // -----------------------
-            7'b1100011: // beq, bne, blt, bge
-                imm_out = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0};
+            7'b1100011:
+                imm_out = {{19{instr[31]}},
+                           instr[31],
+                           instr[7],
+                           instr[30:25],
+                           instr[11:8],
+                           1'b0};
 
             // -----------------------
-            // DEFAULT (NOP)
+            // U-TYPE
+            // lui
+            // imm = instr[31:12] << 12
             // -----------------------
-            default: 
+            7'b0110111:
+                imm_out = {instr[31:12], 12'b0};
+
+            // -----------------------
+            // DEFAULT
+            // -----------------------
+            default:
                 imm_out = 32'd0;
 
         endcase
