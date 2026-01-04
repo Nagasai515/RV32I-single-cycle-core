@@ -7,11 +7,12 @@ module pc (
     output reg  [31:0] pc
 );
 
-    always @(posedge clk) begin
-        if (reset)
-            pc <= 32'b0;         // Start from address 0
-        else
-            pc <= next_pc;       // Update PC
-    end
+always @(posedge clk or posedge reset) begin
+    if (reset)
+        pc <= 32'b0;
+    else
+        pc <= next_pc;
+end
+
 
 endmodule

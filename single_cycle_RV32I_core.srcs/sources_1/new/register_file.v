@@ -12,6 +12,12 @@ module register_file (
 );
 
     reg [31:0] regs [0:31];
+    integer i;
+initial begin
+    for (i = 0; i < 32; i = i + 1)
+        regs[i] = 32'd0;
+end
+
 
     // ----------------------------
     // WRITE Logic
