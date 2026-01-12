@@ -26,3 +26,13 @@ The processor has been functionally verified through:
 This design serves as a baseline reference for a five-stage pipelined RISC-V processor.
 
 
+## Running the Project
+
+This repository preserves the native Xilinx Vivado project structure.
+To run the design:
+
+1. Clone the repository.
+2. Open the project file `single_cycle_RV32I_core.xpr` in Xilinx Vivado.
+3. Run behavioral simulation to observe waveform and execution results.
+
+No additional project setup is required.
